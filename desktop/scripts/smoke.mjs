@@ -1,0 +1,12 @@
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { dirname, resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const electron = require('electron');
+const env = { ...process.env };
+delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(electron, [join(desktop, 'tests/electron-smoke.cjs')], { cwd: desktop, env, windowsHide: true, stdio: 'inherit' });
+child.on('exit', code => { process.exitCode = code ?? 1; });
+child.on('error', error => { console.error(error); process.exitCode = 1; });

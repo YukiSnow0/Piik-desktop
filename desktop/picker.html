@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <title>选择分享内容</title><link rel="stylesheet" href="assets/palette.css"><link rel="stylesheet" href="picker.css">
+</head><body>
+  <header><h1>把什么分享给朋友？</h1><p>选择屏幕或窗口。需要只分享某个应用的声音时，请使用 Piik 的「程序 / 窗口」采集。</p></header>
+  <div id="sources" role="group" aria-label="可分享的屏幕和窗口"></div>
+  <footer><label><input id="audio" type="checkbox">共享系统声音（会包含语音软件）</label><p>本选择器的声音覆盖整个系统；它不会自动排除通话。</p></footer>
+  <script src="picker.js"></script>
+</body></html>

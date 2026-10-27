@@ -1,0 +1,43 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--wall); color: var(--ink); font: 14px 'Segoe UI', 'Microsoft YaHei UI', sans-serif; }
+button, input { font: inherit; }
+button, .brand { -webkit-user-select: none; user-select: none; }
+button { cursor: pointer; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--paper); padding: 9px 14px; transition: background .15s, transform .15s; }
+button:hover { background: var(--control-hover); }
+button:active { transform: translateY(1px); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--primary); color: var(--primary-ink); border-color: transparent; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+.toolbar { height: 68px; display: flex; align-items: center; gap: 16px; padding: 0 22px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.brand { color: var(--ink); text-decoration: none; display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+.brand img { width: 34px; height: 34px; }
+.brand strong { font-size: 19px; letter-spacing: -.5px; }
+.brand span { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 5px; letter-spacing: 0; }
+nav { display: flex; gap: 5px; }
+nav button { width: 34px; height: 34px; padding: 0; border-color: transparent; font-size: 21px; }
+form { display: flex; gap: 8px; flex: 1; max-width: 650px; margin-left: auto; }
+input { width: 100%; min-width: 100px; border: 1px solid var(--line); color: var(--ink); background: var(--wall); border-radius: 11px; padding: 9px 13px; }
+input::placeholder { color: var(--muted); }
+form button { white-space: nowrap; }
+.status { white-space: nowrap; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.status i { width: 7px; height: 7px; background: var(--busy); border-radius: 50%; }
+.status i.ready { background: var(--live); }
+.status i.error { background: var(--danger); }
+.certificate { padding: 7px 9px; font-size: 12px; border-color: transparent; }
+.update { font-size: 12px; white-space: nowrap; padding: 8px 10px; }
+.update.available { color: var(--primary-ink); background: var(--primary); border-color: var(--primary); }
+.source-select { width: 96px; flex: 0 0 96px; border: 1px solid var(--line); border-radius: 11px; padding: 7px 6px; background: var(--paper); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+@media (max-width: 1000px) { .status span { display: none; } }
+main { min-height: calc(100vh - 68px); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; background: radial-gradient(ellipse at 50% 35%, var(--paper), var(--wall) 70%); }
+.hero-mark { width: 86px; height: 86px; margin-bottom: 28px; box-shadow: 0 12px 35px rgb(36 53 78 / .12); border-radius: 24%; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 3px; color: var(--muted); margin: 0 0 16px; }
+h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.4; font-weight: 650; letter-spacing: -1.5px; margin: 0; }
+#message { color: var(--muted); line-height: 1.9; max-width: 600px; overflow-wrap: anywhere; margin: 20px 0; }
+.tip { margin-top: 48px; color: var(--muted); }
+.tip span { font-weight: 600; color: var(--ink); }
+.tip p { line-height: 1.9; font-size: 13px; }
+#notice { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); padding: 12px 20px; background: var(--paper); border: 1px solid var(--danger); border-radius: 12px; box-shadow: var(--panel-shadow); z-index: 10; }
+[hidden] { display: none !important; }
+@media (max-width: 1000px) { .toolbar { gap: 9px; padding: 0 12px; } .brand span, .certificate { display: none; } }
+@media (prefers-color-scheme: dark) { :root { --wall: var(--piik-dark-wall); --paper: var(--piik-dark-paper); --ink: var(--piik-dark-ink); --muted: var(--piik-dark-muted); --line: var(--piik-dark-line); --control-hover: var(--piik-dark-hover); } }

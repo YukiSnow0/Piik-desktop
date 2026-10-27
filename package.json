@@ -1,0 +1,13 @@
+{
+  "name": "piik-desktop-workspace",
+  "version": "0.3.0",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=24 <27" },
+  "scripts": {
+    "desktop:start": "npm --prefix desktop start",
+    "desktop:test": "npm --prefix desktop test",
+    "desktop:smoke": "npm --prefix desktop run smoke",
+    "desktop:package": "npm --prefix desktop run package"
+  }
+}

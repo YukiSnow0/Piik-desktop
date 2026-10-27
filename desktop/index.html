@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <title>Piik 桌面版</title>
+  <link rel="stylesheet" href="assets/palette.css">
+  <link rel="stylesheet" href="desktop.css">
+</head>
+<body>
+  <header class="toolbar">
+    <a class="brand" href="#" id="brand" title="返回启动页"><img src="assets/favicon.svg" alt=""><strong>Piik <span>桌面版</span></strong></a>
+    <nav aria-label="窗口导航">
+      <button id="back" title="返回上一页" aria-label="返回上一页">←</button>
+      <button id="home" title="房间启动页" aria-label="房间启动页">⌂</button>
+      <button id="reload" title="刷新当前页面" aria-label="刷新当前页面">↻</button>
+    </nav>
+    <form id="join-form">
+      <input id="invite" type="url" required spellcheck="false" autocomplete="off" placeholder="粘贴朋友的完整邀请链接" aria-label="Piik 邀请链接">
+      <button class="primary" id="join" type="submit">加入朋友</button>
+    </form>
+    <button id="certificate" class="certificate" title="查看本地房间证书指纹">证书</button>
+    <button id="update" class="update" title="检查 Piik 正式版更新">更新</button>
+    <select id="update-source" class="source-select" aria-label="更新源" title="更新源">
+      <option value="auto">自动选源</option>
+      <option value="github">GitHub</option>
+      <option value="gitee">国内镜像</option>
+    </select>
+    <div class="status" role="status"><i id="dot"></i><span id="status">正在启动</span></div>
+  </header>
+  <main id="welcome">
+    <img class="hero-mark" src="assets/favicon.svg" alt="Piik">
+    <p class="eyebrow">SHARE THE GOOD STUFF</p>
+    <h1 id="headline">朋友的放映室，<br>现在就在桌面。</h1>
+    <p id="message">正在准备屏幕分享和房间语音…</p>
+    <button class="primary" id="retry" hidden>重新启动</button>
+    <div class="tip"><span>一起看，也一起聊。</span><p>通过 UU 联机时，在「本地房间」里选择 UU 的虚拟地址。<br>保持 UU 和这个窗口打开，就能继续分享。</p></div>
+  </main>
+  <div id="notice" role="alert" hidden></div>
+  <script src="chrome.js"></script>
+</body>
+</html>

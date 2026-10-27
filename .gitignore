@@ -1,0 +1,10 @@
+node_modules/
+build/
+Piik-Data/
+desktop/assets/
+.env
+.env.*
+*.log
+*.zip
+.DS_Store
+Thumbs.db
