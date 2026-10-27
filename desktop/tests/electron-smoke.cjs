@@ -22,11 +22,12 @@ app.whenReady().then(async () => {
   await mkdir(output, { recursive: true });
   const { startDesktop } = require('../main.cjs');
   desktop = await startDesktop({ data: join(output, 'core'), checkOnStartup: false });
-  const { window, page, backend } = desktop;
+  const { window, page } = desktop;
+  let backend = desktop.backend;
   page.webContents.on('console-message', event => { if (event.level === 'error') errors.push(event.message); });
-  const capture = async name => {
+  const capture = async (name, contents = page.webContents) => {
     await delay(350);
-    try { await writeFile(join(output, name), (await page.webContents.capturePage()).toPNG()); screenshots[name] = 'captured'; }
+    try { await writeFile(join(output, name), (await contents.capturePage()).toPNG()); screenshots[name] = 'captured'; }
     catch (error) { screenshots[name] = `unavailable in automation surface: ${error.message}`; }
   };
   await desktop.ready;
@@ -38,6 +39,15 @@ app.whenReady().then(async () => {
     return buttons.length > 0 && buttons.every(button => getComputedStyle(button.parentElement).display === 'none');
   })()`), 'terminal-only launcher diagnostic entry hidden');
   await capture('launcher.png');
+  await capture('desktop.png', window.webContents);
+  window.setSize(860, 680);
+  await delay(200);
+  assert.equal(await window.webContents.executeJavaScript(`(() => {
+    const toolbar = document.querySelector('.toolbar');
+    return toolbar.scrollWidth <= innerWidth && [...toolbar.children].every(element => element.getBoundingClientRect().right <= innerWidth);
+  })()`), true, 'room actions fit the minimum supported window width');
+  await capture('desktop-compact.png', window.webContents);
+  window.setSize(1320, 900);
   assert.equal(await page.webContents.executeJavaScript('typeof require'), 'undefined');
   assert.equal(await page.webContents.executeJavaScript('typeof window.piikDesktop'), 'undefined');
   assert.equal(await window.webContents.executeJavaScript('typeof window.piikDesktop.home'), 'function');
@@ -70,7 +80,7 @@ app.whenReady().then(async () => {
     updateDialogs++;
     return { response: 0, checkboxChecked: false };
   };
-  const corePid = backend.child.pid;
+  let corePid = backend.child.pid;
   await window.webContents.executeJavaScript('window.piikDesktop.update()');
   assert.equal(updateDialogs, 1);
   assert.equal(desktop.updates.pending, null);
@@ -83,19 +93,29 @@ app.whenReady().then(async () => {
   await until(() => updateDialogs === 3, 'original upstream download enters desktop updater');
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   dialog.showMessageBox = oldDialog;
-  const origin = new URL(backend.launcher).origin;
+  let origin = new URL(backend.launcher).origin;
   const state = await fetch(origin + '/api/client-launcher').then(r => r.json());
   const address = state.lan?.selected || state.lan?.addresses?.[0]?.address;
   assert.ok(address, 'test LAN available');
-  // Select Local through the actual production UI and its real launch handler.
-  await page.webContents.executeJavaScript(`(() => {
-    const radios = [...document.querySelectorAll('input[type=radio]')];
-    const local = radios.find(element => element.value === 'local');
-    if (local) local.click();
-    const select = [...document.querySelectorAll('select')].find(element => [...element.options].some(option => option.value === ${JSON.stringify(address)}));
-    if (select) { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(address)}); select.dispatchEvent(new Event('change', { bubbles: true })); }
-  })()`);
-  await delay(300);
+  // Mode tiles are ARIA radio buttons. Wait for React to expose the LAN field
+  // before choosing an address, including on a fresh profile defaulting to Link.
+  async function chooseMode(mode) {
+    const pattern = mode === 'local' ? '本地房间|Local' : '公网邀请|Public';
+    await until(() => page.webContents.executeJavaScript('document.querySelectorAll("button[role=radio]").length === 2'), 'mode choices render');
+    await page.webContents.executeJavaScript(`(() => {
+      [...document.querySelectorAll('button[role=radio]')].find(element => new RegExp(${JSON.stringify(pattern)}).test(element.getAttribute('aria-label'))).click();
+    })()`);
+    await until(() => page.webContents.executeJavaScript(`Boolean([...document.querySelectorAll('button[role=radio]')].find(element => new RegExp(${JSON.stringify(pattern)}).test(element.getAttribute('aria-label')) && element.getAttribute('aria-checked') === 'true'))`), 'mode selected');
+    if (mode !== 'local') return;
+    await until(() => page.webContents.executeJavaScript(`Boolean([...document.querySelectorAll('select')].find(element => [...element.options].some(option => option.value === ${JSON.stringify(address)})))`), 'LAN addresses render');
+    await page.webContents.executeJavaScript(`(() => {
+      const select = [...document.querySelectorAll('select')].find(element => [...element.options].some(option => option.value === ${JSON.stringify(address)}));
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(address)});
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await delay(100);
+  }
+  await chooseMode('local');
   await page.webContents.executeJavaScript(`(() => {
     const button = [...document.querySelectorAll('button')].find(element => /进入 Piik|Open Piik/.test(element.textContent));
     if (!button) throw Error('Launch button missing');
@@ -116,6 +136,65 @@ app.whenReady().then(async () => {
   await window.webContents.executeJavaScript(`window.piikDesktop.join(${JSON.stringify(backend.launcher)})`);
   await until(() => page.webContents.getURL() === backend.launcher, 'toolbar navigation');
   assert.equal(await window.webContents.executeJavaScript('window.piikDesktop.join("file:///C:/Windows").then(()=>false,()=>true)'), true);
+  // Both actions run production IPC against real cores. A canceled action must
+  // leave the same room running; confirmed actions must retire it completely.
+  let roomDialogs = 0, roomChoice = 0, releaseDialog;
+  dialog.showMessageBox = async (_parent, options) => {
+    assert.ok(['重新选择模式', '退出房间'].includes(options.title));
+    roomDialogs++;
+    if (roomChoice === 'pending') return new Promise(resolve => { releaseDialog = resolve; });
+    return { response: roomChoice };
+  };
+  await window.webContents.executeJavaScript('window.piikDesktop.home()');
+  assert.equal(backend.child.exitCode, null, 'cancel reselect preserves core');
+  assert.equal(desktop.backend, backend);
+  assert.equal((await fetch('http://127.0.0.1:8787/')).status, 200);
+  await page.webContents.executeJavaScript('window.open(location.href, "_blank"); void 0');
+  await until(() => BrowserWindow.getAllWindows().length === 2, 'room popup opens');
+  const retired = backend, retiredOrigin = origin;
+  roomChoice = 'pending';
+  const leaving = window.webContents.executeJavaScript('window.piikDesktop.leave()');
+  await until(() => releaseDialog, 'leave confirmation');
+  const repeated = window.webContents.executeJavaScript('window.piikDesktop.home()');
+  await delay(100);
+  assert.equal(roomDialogs, 2, 'repeated actions share one confirmation');
+  releaseDialog({ response: 1 });
+  await Promise.all([leaving, repeated]);
+  assert.notEqual(retired.child.exitCode, null, 'leaving stops the owned core');
+  await assert.rejects(fetch(retiredOrigin + '/api/client-launcher'));
+  await assert.rejects(fetch('http://127.0.0.1:8787/'));
+  assert.equal(BrowserWindow.getAllWindows().length, 1, 'room popups closed');
+  backend = desktop.backend;
+  origin = new URL(backend.launcher).origin;
+  assert.equal(page.webContents.getURL(), backend.launcher);
+  assert.equal(page.webContents.navigationHistory.canGoBack(), false, 'stale invitation removed from history');
+  const fresh = await fetch(origin + '/api/client-launcher').then(r => r.json());
+  assert.equal(fresh.starting, false);
+  assert.ok(!fresh.target, 'leaving returns to an unstarted launcher');
+  await chooseMode('link');
+  await page.webContents.executeJavaScript(`(() => {
+    [...document.querySelectorAll('button')].find(element => /进入 Piik|Open Piik/.test(element.textContent)).click();
+  })()`);
+  await until(async () => {
+    const current = await fetch(origin + '/api/client-launcher').then(r => r.json());
+    return current.starting || current.target || current.detail;
+  }, 'public invite launch accepted');
+  const publicCore = backend, publicOrigin = origin;
+  roomChoice = 1;
+  await window.webContents.executeJavaScript('document.getElementById("home").click(); void 0');
+  await until(() => desktop.backend !== publicCore && desktop.backend.launcher && page.webContents.getURL() === desktop.backend.launcher, 'public invite reselect completes', 30000);
+  assert.notEqual(publicCore.child.exitCode, null);
+  await assert.rejects(fetch(publicOrigin + '/api/client-launcher'));
+  backend = desktop.backend;
+  origin = new URL(backend.launcher).origin;
+  await chooseMode('local');
+  await page.webContents.executeJavaScript(`(() => {
+    [...document.querySelectorAll('button')].find(element => /进入 Piik|Open Piik/.test(element.textContent)).click();
+  })()`);
+  await until(() => page.webContents.getURL().startsWith('http://127.0.0.1:8787/'), 'switch from public invite to local room without application restart');
+  assert.equal((await fetch('http://127.0.0.1:8787/')).status, 200);
+  corePid = backend.child.pid;
+  dialog.showMessageBox = oldDialog;
   const originalDialog = dialog.showMessageBox;
   let closeDialogs = 0, choice = { response: 2, checkboxChecked: false }, preference = 0;
   dialog.showMessageBox = async (_parent, options) => {
@@ -167,7 +246,7 @@ app.whenReady().then(async () => {
   nextLifecycle.dispose(); nextWindow.destroy();
   await assert.rejects(fetch(origin + '/api/client-launcher'));
   await assert.rejects(fetch('http://127.0.0.1:8787/'));
-  const result = { passed: true, launcher: true, localRoom: true, nativeCapabilities: health.nativeMedia, windowCapture: 'physical acceptance required', screenshots, rendererIsolation: true, updateUI: true, domesticSource: true, updateCancellation: true, upstreamUpdateInterception: true, launcherDiagnosticHidden: true, closeCancellation: true, trayHideRestore: true, closePreferencePersistence: true, ipcNavigation: true, cleanShutdown: true, consoleErrors: errors };
+  const result = { passed: true, launcher: true, localRoom: true, publicToLocal: true, leaveRoom: true, roomActionCancellation: true, roomActionSerialization: true, nativeCapabilities: health.nativeMedia, windowCapture: 'physical acceptance required', screenshots, rendererIsolation: true, updateUI: true, domesticSource: true, updateCancellation: true, upstreamUpdateInterception: true, launcherDiagnosticHidden: true, closeCancellation: true, trayHideRestore: true, closePreferencePersistence: true, ipcNavigation: true, cleanShutdown: true, consoleErrors: errors };
   await writeFile(join(output, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
   app.exit(0);

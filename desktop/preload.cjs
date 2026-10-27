@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('piikDesktop', {
   home: () => ipcRenderer.invoke('desktop:home'),
+  leave: () => ipcRenderer.invoke('desktop:leave'),
   back: () => ipcRenderer.invoke('desktop:back'),
   reload: () => ipcRenderer.invoke('desktop:reload'),
   join: value => ipcRenderer.invoke('desktop:join', value),

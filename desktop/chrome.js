@@ -7,7 +7,7 @@ function showError(error) {
   clearTimeout(noticeTimer);
   noticeTimer = setTimeout(() => { $('notice').hidden = true; }, 6000);
 }
-for (const action of ['home', 'back', 'reload', 'certificate', 'update']) {
+for (const action of ['home', 'leave', 'back', 'reload', 'certificate', 'update']) {
   $(action).addEventListener('click', () => api[action]().catch(showError));
 }
 $('brand').addEventListener('click', event => { event.preventDefault(); api.home().catch(showError); });
@@ -21,10 +21,15 @@ $('join-form').addEventListener('submit', async event => {
   finally { $('join').disabled = false; }
 });
 api.onState(state => {
-  $('status').textContent = state.phase === 'ready' ? '服务就绪' : state.phase === 'error' ? '服务已停止' : '正在启动';
+  const busy = state.roomBusy || ['starting', 'switching'].includes(state.phase);
+  $('status').textContent = state.phase === 'ready' ? '服务就绪' : state.phase === 'error' ? '服务已停止' : state.phase === 'switching' ? '正在退出' : '正在启动';
   $('dot').className = state.phase;
-  $('back').disabled = !state.canGoBack;
-  $('home').disabled = state.phase !== 'ready';
+  $('back').disabled = busy || !state.canGoBack;
+  $('home').disabled = busy;
+  $('leave').disabled = busy || state.phase !== 'ready';
+  $('reload').disabled = busy || state.phase !== 'ready';
+  $('join').disabled = busy || state.phase !== 'ready';
+  $('invite').disabled = busy || state.phase !== 'ready';
   $('certificate').disabled = !state.certificate;
   $('welcome').hidden = state.showPage;
   $('retry').hidden = state.phase !== 'error';
@@ -41,6 +46,9 @@ api.onState(state => {
   if (state.phase === 'error') {
     $('headline').textContent = '暂时没能打开房间';
     $('message').textContent = state.error;
+  } else if (state.phase === 'switching') {
+    $('headline').textContent = '正在返回选择页';
+    $('message').textContent = '正在结束当前房间、屏幕分享和语音，请稍候…';
   } else if (state.phase === 'starting') {
     $('headline').innerHTML = '朋友的放映室，<br>现在就在桌面。';
     $('message').textContent = '正在准备屏幕分享和房间语音…';

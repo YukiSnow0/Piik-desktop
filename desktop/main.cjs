@@ -25,7 +25,7 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
     backgroundThrottling: false,
   } });
   let phase = 'starting', error = '', showPage = false, closing = false, shutdown, fullscreen = false;
-  let certificate = '', chooser = null, updateTimer;
+  let certificate = '', chooser = null, updateTimer, roomAction = null;
   const trustedCertificates = new Set();
   const popups = new Set();
   const lifecycle = new WindowLifecycle({
@@ -36,7 +36,7 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
   const trusted = contents => contents === page.webContents || [...popups].some(popup => popup.webContents === contents);
   const sendState = () => {
     if (window.isDestroyed()) return;
-    window.webContents.send('desktop:state', { phase, error, showPage, certificate, update: updates.state, canGoBack: !page.webContents.isDestroyed() && page.webContents.navigationHistory.canGoBack() });
+    window.webContents.send('desktop:state', { phase, error, showPage, certificate, roomBusy: !!roomAction, update: updates.state, canGoBack: !page.webContents.isDestroyed() && page.webContents.navigationHistory.canGoBack() });
   };
   updates.on('state', sendState);
   async function offerRestart() {
@@ -104,15 +104,61 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
     phase = 'error';
     sendState();
   }
+  function watchBackend(current) {
+    current.on('stopped', () => {
+      if (!closing && backend === current) pageError('Piik 本地服务已停止，可点击「重新选择」重试。');
+    });
+    current.on('certificate', value => {
+      if (closing || backend !== current) return;
+      certificate = value; sendState();
+    });
+    return current;
+  }
+  function returnToSelection(action) {
+    if (closing || phase === 'starting' || roomAction) return roomAction;
+    roomAction = (async () => {
+      const leaving = action === 'leave';
+      const result = await dialog.showMessageBox(window, {
+        type: 'question', title: leaving ? '退出房间' : '重新选择模式',
+        message: leaving ? '退出当前房间并返回选择页？' : '结束当前会话，重新选择房间模式？',
+        detail: '将停止本机的屏幕分享和语音，关闭房间子窗口。本机创建的房间会结束，公网邀请链接会失效；如果你在观看朋友的房间，只会断开你的连接。桌面应用保持打开。',
+        buttons: ['取消', leaving ? '退出房间' : '重新选择'], defaultId: 0, cancelId: 0,
+      });
+      if (result.response !== 1 || closing) return;
+      phase = 'switching'; error = ''; certificate = ''; sendState();
+      if (chooser) chooser.destroy();
+      for (const popup of popups) popup.destroy();
+      fullscreen = false; window.setFullScreen(false);
+      if (showPage) window.contentView.removeChildView(page);
+      showPage = false; sendState();
+      // Dispose the old document (including WebRTC and browser capture) before
+      // stopping the owned core, then wait for its listeners/tunnel to close.
+      await page.webContents.loadURL('about:blank');
+      await backend.stop();
+      if (closing) return;
+      backend = watchBackend(new Backend(updates.runtime, coreData));
+      const launcher = await backend.start();
+      if (closing) return;
+      await navigate(launcher);
+      page.webContents.navigationHistory.clear();
+      phase = 'ready'; sendState();
+    })().catch(async failure => {
+      if (!closing) { await backend.stop(); pageError(failure.message); }
+    }).finally(() => { roomAction = null; sendState(); });
+    sendState();
+    return roomAction;
+  }
   const handlers = {
     'desktop:ready': () => sendState(),
-    'desktop:home': () => backend.launcher ? navigate(backend.launcher) : undefined,
+    'desktop:home': () => returnToSelection('reselect'),
+    'desktop:leave': () => returnToSelection('leave'),
     'desktop:join': async value => {
+      if (roomAction || phase !== 'ready') throw new Error('请等待房间服务准备完成。');
       if (typeof value !== 'string' || value.length > 16384) throw new Error('邀请链接格式不正确。');
       await navigate(value);
     },
-    'desktop:back': () => { if (page.webContents.navigationHistory.canGoBack()) page.webContents.navigationHistory.goBack(); },
-    'desktop:reload': () => page.webContents.reload(),
+    'desktop:back': () => { if (!roomAction && page.webContents.navigationHistory.canGoBack()) page.webContents.navigationHistory.goBack(); },
+    'desktop:reload': () => { if (!roomAction && phase === 'ready') page.webContents.reload(); },
     'desktop:certificate': () => dialog.showMessageBox(window, {
       type: 'info', title: '本地房间证书', message: certificate ? '请让朋友核对这个 SHA-256 指纹' : '本地房间尚未启动',
       detail: certificate || '使用 UU 时，先在本地房间选择 UU 的虚拟地址并启动。',
@@ -163,6 +209,7 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
   page.webContents.on('did-navigate-in-page', sendState);
   page.webContents.on('render-process-gone', () => pageError('房间窗口意外关闭。请重新启动桌面版。'));
   page.webContents.on('will-prevent-unload', event => {
+    if (roomAction || closing) { event.preventDefault(); return; }
     const response = dialog.showMessageBoxSync(window, { type: 'question', message: '离开当前房间？', detail: '当前观看、分享或语音可能会中断。', buttons: ['留在房间', '离开'], defaultId: 0, cancelId: 0 });
     if (response === 1) event.preventDefault();
   });
@@ -237,8 +284,7 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
     } catch { if (chooser) chooser.close(); else callback({}); }
   });
 
-  backend.on('stopped', () => { if (!closing) pageError('Piik 本地服务已停止，请重新启动。'); });
-  backend.on('certificate', value => { certificate = value; sendState(); });
+  watchBackend(backend);
   window.on('resize', resize);
   window.on('closed', () => { void close(); });
   async function close() {
@@ -253,15 +299,16 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
       for (const channel of Object.keys(handlers)) ipcMain.removeHandler(channel);
       app.removeListener('certificate-error', certificateHandler);
       mediaSession.removeListener('will-download', downloadHandler);
-      await Promise.all([backend.stop(), updates.close()]);
+      await Promise.all([backend.stop(), roomAction, updates.close()]);
       if (!window.isDestroyed()) window.destroy();
     })();
     return shutdown;
   }
   const menu = Menu.buildFromTemplate([
     { label: '房间', submenu: [
-      { label: '房间启动页', accelerator: 'CmdOrCtrl+Home', click: () => { if (backend.launcher) void navigate(backend.launcher).catch(() => {}); } },
-      { label: '刷新', accelerator: 'CmdOrCtrl+R', click: () => page.webContents.reload() },
+      { label: '重新选择模式…', accelerator: 'CmdOrCtrl+Home', click: () => { void returnToSelection('reselect'); } },
+      { label: '退出房间…', accelerator: 'CmdOrCtrl+Shift+L', click: () => { void returnToSelection('leave'); } },
+      { label: '刷新', accelerator: 'CmdOrCtrl+R', click: handlers['desktop:reload'] },
       { type: 'separator' },
       { label: '退出 Piik', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
     ] },
@@ -289,9 +336,7 @@ async function startDesktop({ runtime, data, checkOnStartup = true } = {}) {
       catch (failure) {
         await backend.stop();
         if (closing || !await updates.rollback(failure.message)) throw failure;
-        backend = new Backend(updates.runtime, coreData);
-        backend.on('stopped', () => { if (!closing) pageError('Piik 本地服务已停止，请重新启动。'); });
-        backend.on('certificate', value => { certificate = value; sendState(); });
+        backend = watchBackend(new Backend(updates.runtime, coreData));
         launcher = await backend.start();
       }
       if (closing) return;

@@ -10,12 +10,13 @@
 </head>
 <body>
   <header class="toolbar">
-    <a class="brand" href="#" id="brand" title="返回启动页"><img src="assets/favicon.svg" alt=""><strong>Piik <span>桌面版</span></strong></a>
+    <a class="brand" href="#" id="brand" title="重新选择房间模式"><img src="assets/favicon.svg" alt=""><strong>Piik <span>桌面版</span></strong></a>
     <nav aria-label="窗口导航">
       <button id="back" title="返回上一页" aria-label="返回上一页">←</button>
-      <button id="home" title="房间启动页" aria-label="房间启动页">⌂</button>
       <button id="reload" title="刷新当前页面" aria-label="刷新当前页面">↻</button>
     </nav>
+    <button id="home" class="room-action" title="结束当前会话，重新选择本地房间或公网邀请">重新选择</button>
+    <button id="leave" class="room-action" title="退出当前房间，停止分享和语音并返回选择页">退出房间</button>
     <form id="join-form">
       <input id="invite" type="url" required spellcheck="false" autocomplete="off" placeholder="粘贴朋友的完整邀请链接" aria-label="Piik 邀请链接">
       <button class="primary" id="join" type="submit">加入朋友</button>

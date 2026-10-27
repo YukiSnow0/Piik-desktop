@@ -1,6 +1,6 @@
 {
   "name": "piik-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Piik in an independent Windows desktop window",
   "author": "Piik Desktop community contributors",
   "private": true,

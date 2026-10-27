@@ -28,6 +28,7 @@ form button { white-space: nowrap; }
 .update { font-size: 12px; white-space: nowrap; padding: 8px 10px; }
 .update.available { color: var(--primary-ink); background: var(--primary); border-color: var(--primary); }
 .source-select { width: 96px; flex: 0 0 96px; border: 1px solid var(--line); border-radius: 11px; padding: 7px 6px; background: var(--paper); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.room-action { white-space: nowrap; font-size: 12px; padding: 8px 10px; }
 @media (max-width: 1000px) { .status span { display: none; } }
 main { min-height: calc(100vh - 68px); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; background: radial-gradient(ellipse at 50% 35%, var(--paper), var(--wall) 70%); }
 .hero-mark { width: 86px; height: 86px; margin-bottom: 28px; box-shadow: 0 12px 35px rgb(36 53 78 / .12); border-radius: 24%; }
@@ -39,5 +40,5 @@ h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.4; font-weight: 650; lett
 .tip p { line-height: 1.9; font-size: 13px; }
 #notice { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); padding: 12px 20px; background: var(--paper); border: 1px solid var(--danger); border-radius: 12px; box-shadow: var(--panel-shadow); z-index: 10; }
 [hidden] { display: none !important; }
-@media (max-width: 1000px) { .toolbar { gap: 9px; padding: 0 12px; } .brand span, .certificate { display: none; } }
+@media (max-width: 1150px) { .toolbar { gap: 6px; padding: 0 10px; } .brand span, .certificate, .status span { display: none; } .brand strong { font-size: 16px; } .brand img { width: 28px; height: 28px; } form { gap: 5px; } input { padding: 9px 8px; } }
 @media (prefers-color-scheme: dark) { :root { --wall: var(--piik-dark-wall); --paper: var(--piik-dark-paper); --ink: var(--piik-dark-ink); --muted: var(--piik-dark-muted); --line: var(--piik-dark-line); --control-hover: var(--piik-dark-hover); } }
